@@ -20,6 +20,13 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
+    triggers {
+        // Tu chay khi co push/merge vao master (can config GitHub webhook).
+        githubPush()
+        // Fallback: poll git moi 3 phut neu webhook khong toi duoc Jenkins.
+        pollSCM('H/3 * * * *')
+    }
+
     stages {
         stage('Setup Node & Install Dependencies') {
             steps {
