@@ -20,15 +20,6 @@ pipeline {
     }
 
     stages {
-        stage('Checkout Code') {
-            steps {
-                echo 'Pulling code from GitHub...'
-                git url: 'https://eveningcafe/vue-nodejs-youtube-clone',
-                    branch: 'master',
-                    credentialsId: 'ba1f8258-2490-4aaf-a939-aac24f4a3f04'
-            }
-        }
-
         stage('Setup Node & Install Dependencies') {
             steps {
                 echo 'Installing Node.js dependencies...'
