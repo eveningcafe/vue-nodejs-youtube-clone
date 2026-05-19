@@ -1,20 +1,27 @@
-# Sử dụng Nginx nhẹ để chạy ứng dụng
+# ---------- Stage 1: Build Vue app ----------
+FROM node:16-alpine AS builder
+
+WORKDIR /app
+
+# Copy manifest truoc de tan dung layer cache khi code thay doi
+COPY package*.json ./
+RUN npm ci --no-audit --no-fund
+
+# Copy phan con lai va build
+COPY . .
+RUN npm run build
+
+# ---------- Stage 2: Nginx runtime ----------
 FROM nginx:stable-alpine
 
-# Chỉ định thư mục làm việc (tùy chọn)
 WORKDIR /usr/share/nginx/html
-
-# Xóa các file mặc định của Nginx
 RUN rm -rf ./*
 
-# Copy toàn bộ nội dung thư mục dist (đã được Jenkins build) vào Nginx
-# Lưu ý: Đường dẫn 'dist/' phải tương ứng với cấu trúc thư mục trên Jenkins
-COPY dist/ .
+# Lay dist tu stage builder
+COPY --from=builder /app/dist .
 
-# Copy cấu hình Nginx tùy chỉnh (để handle Routing của SPA)
+# Cau hinh Nginx tuy chinh (handle SPA routing)
 COPY default.conf /etc/nginx/conf.d/default.conf
 
-# Nginx chạy ở port 80
 EXPOSE 80
-
 CMD ["nginx", "-g", "daemon off;"]

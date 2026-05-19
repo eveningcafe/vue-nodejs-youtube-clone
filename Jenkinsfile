@@ -2,15 +2,11 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION       = 'ap-southeast-1'
-        AWS_ACCOUNT_ID   = '891920435433' // change as your account
-        ECR_REPO_NAME    = 'vue-nodejs-youtube-clone'
-        ECR_REGISTRY     = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-        IMAGE_NAME       = "${ECR_REGISTRY}/${ECR_REPO_NAME}"
-        IMAGE_TAG        = "${env.BUILD_NUMBER}"
-        AWS_CREDENTIALS  = 'aws-ecr-credentials'
-        // webpack 4 (Vue CLI 4) khong tuong thich OpenSSL 3 cua Node 17+
-        NODE_OPTIONS     = '--openssl-legacy-provider'
+        DOCKERHUB_USERNAME = 'your-dockerhub-username' // change as your username
+        IMAGE_REPO         = 'vue-nodejs-youtube-clone'
+        IMAGE_NAME         = "${DOCKERHUB_USERNAME}/${IMAGE_REPO}"
+        IMAGE_TAG          = "${env.BUILD_NUMBER}"
+        DOCKERHUB_CREDS    = 'dockerhub-credentials'
     }
 
     options {
@@ -21,83 +17,42 @@ pipeline {
     }
 
     triggers {
-        // Tu chay khi co push/merge vao master (can config GitHub webhook).
         githubPush()
-        // Fallback: poll git moi 3 phut neu webhook khong toi duoc Jenkins.
         pollSCM('H/3 * * * *')
     }
 
     stages {
-        stage('Setup Node & Install Dependencies') {
-            steps {
-                echo 'Installing Node.js dependencies...'
-                sh '''
-                    node -v
-                    npm -v
-                    npm ci --no-audit --no-fund
-                '''
-            }
-        }
-
-        stage('Lint') {
-            steps {
-                echo 'Running lint...'
-                sh 'npm run lint || true'
-            }
-        }
-
-        stage('Build Dist') {
-            steps {
-                echo 'Building Vue app -> dist/ ...'
-                sh 'npm run build'
-            }
-            post {
-                success {
-                    archiveArtifacts artifacts: 'dist/**', fingerprint: true, onlyIfSuccessful: true
-                }
-            }
-        }
-
         stage('Build Docker Image') {
             steps {
-                echo "Building Docker image ${IMAGE_NAME}:${IMAGE_TAG} ..."
+                echo "Building image ${IMAGE_NAME}:${IMAGE_TAG} (multi-stage build inside Docker)..."
                 sh '''
                     docker build \
                         -t ${IMAGE_NAME}:${IMAGE_TAG} \
                         -t ${IMAGE_NAME}:latest \
                         -f Dockerfile .
-                    docker images | grep ${ECR_REPO_NAME} || true
+                    docker images | grep ${IMAGE_REPO} || true
                 '''
             }
         }
 
-        stage('Login to ECR') {
+        stage('Login to Docker Hub') {
             steps {
-                echo 'Logging in to AWS ECR...'
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: "${AWS_CREDENTIALS}",
-                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                ]]) {
+                echo 'Logging in to Docker Hub...'
+                withCredentials([usernamePassword(
+                    credentialsId: "${DOCKERHUB_CREDS}",
+                    usernameVariable: 'DH_USER',
+                    passwordVariable: 'DH_PASS'
+                )]) {
                     sh '''
-                        aws ecr describe-repositories \
-                            --repository-names ${ECR_REPO_NAME} \
-                            --region ${AWS_REGION} >/dev/null 2>&1 || \
-                        aws ecr create-repository \
-                            --repository-name ${ECR_REPO_NAME} \
-                            --region ${AWS_REGION}
-
-                        aws ecr get-login-password --region ${AWS_REGION} \
-                            | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                        echo "${DH_PASS}" | docker login -u "${DH_USER}" --password-stdin
                     '''
                 }
             }
         }
 
-        stage('Push to ECR') {
+        stage('Push to Docker Hub') {
             steps {
-                echo "Pushing image to ${ECR_REGISTRY} ..."
+                echo "Pushing ${IMAGE_NAME}:${IMAGE_TAG} and :latest ..."
                 sh '''
                     docker push ${IMAGE_NAME}:${IMAGE_TAG}
                     docker push ${IMAGE_NAME}:latest
@@ -108,15 +63,15 @@ pipeline {
 
     post {
         always {
-            echo 'Cleaning up local Docker images...'
+            echo 'Cleaning up local Docker images & logging out...'
             sh '''
                 docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true
                 docker rmi ${IMAGE_NAME}:latest || true
-                docker logout ${ECR_REGISTRY} || true
+                docker logout || true
             '''
         }
         success {
-            echo "Pipeline succeeded. Image: ${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Pipeline succeeded. Image pushed: ${IMAGE_NAME}:${IMAGE_TAG}"
         }
         failure {
             echo 'Pipeline failed.'
