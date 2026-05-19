@@ -5,7 +5,6 @@
 
 set -euo pipefail
 
-NODE_MAJOR=16
 UBUNTU_CODENAME="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")"
 ARCH="$(dpkg --print-architecture)"
 
@@ -24,14 +23,27 @@ apt-get install -y ca-certificates curl gnupg lsb-release unzip git
 
 install -m 0755 -d /etc/apt/keyrings
 
-# ---------- Node.js 16 + npm ----------
-log "Cai Node.js ${NODE_MAJOR}.x"
-curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
-    | gpg --dearmor --yes -o /etc/apt/keyrings/nodesource.gpg
-echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
-    > /etc/apt/sources.list.d/nodesource.list
-apt-get update -y
-apt-get install -y nodejs
+# ---------- Node.js + npm ----------
+# Node 16 da EOL nen NodeSource khong build cho Ubuntu moi. Tai binary truc tiep.
+NODE_VERSION_FULL="${NODE_VERSION_FULL:-16.20.2}"
+case "${ARCH}" in
+    amd64) NODE_ARCH="x64" ;;
+    arm64) NODE_ARCH="arm64" ;;
+    *) echo "Arch khong ho tro cho Node: ${ARCH}"; exit 1 ;;
+esac
+
+log "Cai Node.js v${NODE_VERSION_FULL} (linux-${NODE_ARCH}) tu nodejs.org"
+NODE_TMP="$(mktemp -d)"
+NODE_TARBALL="node-v${NODE_VERSION_FULL}-linux-${NODE_ARCH}.tar.xz"
+curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION_FULL}/${NODE_TARBALL}" \
+    -o "${NODE_TMP}/node.tar.xz"
+tar -xJf "${NODE_TMP}/node.tar.xz" -C /usr/local --strip-components=1 --no-same-owner
+rm -rf "${NODE_TMP}"
+
+# Verify ngay - neu fail script se dung o day
+command -v node >/dev/null || { echo "Node install FAILED"; exit 1; }
+command -v npm  >/dev/null || { echo "npm install FAILED";  exit 1; }
+echo "  node: $(node -v)   npm: $(npm -v)"
 
 # ---------- Docker ----------
 log "Cai Docker Engine"
