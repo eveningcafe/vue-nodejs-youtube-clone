@@ -68,6 +68,26 @@ npm run lint
 
 See [Configuration Reference](https://cli.vuejs.org/config/).
 
+## Jenkins CI/CD — Docker Hub Setup (branch `dockerhub`)
+
+The `dockerhub` branch builds the app inside a multi-stage Docker image and pushes to Docker Hub. To run it on your Jenkins:
+
+1. **Sửa `DOCKERHUB_USERNAME`** trong `Jenkinsfile` (dòng 5) thành username Docker Hub thật.
+
+2. **Tạo Docker Hub access token** (khuyến nghị, an toàn hơn password):
+   - Vào https://hub.docker.com/settings/security → **New Access Token** → đặt tên `jenkins` → quyền `Read, Write, Delete`.
+   - Copy token (chỉ hiện 1 lần).
+
+3. **Thêm credentials vào Jenkins** (Manage Jenkins → Credentials → global → Add):
+   - Kind: `Username with password`
+   - ID: `dockerhub-credentials` (khớp với biến `DOCKERHUB_CREDS` trong `Jenkinsfile`)
+   - Username: Docker Hub username
+   - Password: access token vừa tạo
+
+4. **Tạo repo trên Docker Hub** (https://hub.docker.com → **Create Repository** → name: `vue-nodejs-youtube-clone`, public hoặc private). Docker Hub free tier cho `1 private repo + unlimited public`.
+
+5. Trong Jenkins job, đổi branch từ `master` → `dockerhub` (hoặc tạo job mới) → **Build Now**.
+
 ## Screenshots
 
 > Delete the screenshot folder if you download this code (Screenshots folder is 3.14mb in size).
