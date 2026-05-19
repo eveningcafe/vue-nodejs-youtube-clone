@@ -9,7 +9,8 @@ pipeline {
         IMAGE_NAME       = "${ECR_REGISTRY}/${ECR_REPO_NAME}"
         IMAGE_TAG        = "${env.BUILD_NUMBER}"
         AWS_CREDENTIALS  = 'aws-ecr-credentials'
-        NODE_VERSION     = '16'
+        // webpack 4 (Vue CLI 4) khong tuong thich OpenSSL 3 cua Node 17+
+        NODE_OPTIONS     = '--openssl-legacy-provider'
     }
 
     options {
